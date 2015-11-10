@@ -1,7 +1,7 @@
 # JavaScriptUnpacker
-Makes easy to unpack JavaScript code packed by Dean Edwards packer tool.  
-Supporting all known encodings.  
-Also, script can contain more then one encoded block and even the mixes with the no-encoded.
+Makes easy to unpacking JavaScript code packed by Dean Edwards packer tool.
+Supports of all known encodings.
+The input script may contain multiple encoded code blocks, mixes with the non-encoded code, and is also supported for repeatedly encoded code.
 
 ## Installation via Composer
 ```sh
