@@ -54,10 +54,16 @@ class JavaScriptUnpacker
         {
             list(, $ascii, $count) = $matches;
             $encoding = self::detectEncoding($body);
-            $packed   = self::stripSlashes($packed, $quote);
+            $packed = str_replace('\\' . $quote, $quote, $packed);
             $decode = $encoding === 95 ? 'decode95' : 'decode62';
-            $script = self::replaceSpecials($this->$decode($packed, $ascii, $count, explode('|', $keywords)));
-            return substr($this->script, 0, $start) . $script . self::unpack(substr($this->script, $end + 1));
+            $script = $this->$decode($packed, $ascii, $count, explode('|', $keywords));
+            $script = str_replace('\\\\', '\\', $script);
+            while (self::isEscaped($script)) {
+                $script = str_replace(['\\\'', '\\"', '\\\\\'', '\\\\"', '\\\\'],
+                    ['\'', '"', '\\\\\'', '\\\\"', '\\'],  $script);
+            }
+            $script = self::replaceSpecials($script);
+            return substr($this->script, 0, $start) . self::unpack($script) . self::unpack(substr($this->script, $end + 1));
         }
         return $this->script;
     }
@@ -69,48 +75,35 @@ class JavaScriptUnpacker
     protected static function replaceSpecials($str)
     {
         $replace = function($str) {
-            return str_replace(['\\n', '\\r'], ["\n", "\r"], $str);
+            return str_replace(['\n', '\r', '\t'], ["\n", "\r", "\t"], $str);
         };
         $pieces = [];
-        $offset = $pos = 0;
-        while ($string = self::findString($str, $offset, $pos, $quote)) {
+        for ($offset = 0; ($string = self::findString($str, $offset, $pos, $quote)) !== false;) {
             $pieces[] = $replace(substr($str, $offset, $pos - $offset));
-            $pieces[] = $string = "$quote$string$quote";
-            $offset = $pos + strlen($string);
+            $pieces[] = $quote . $string . $quote;
+            $offset = $pos + strlen($string) + 2;
         }
         $pieces[] = $replace(substr($str, $offset));
         return implode('', $pieces);
     }
 
     /**
-     * @param string $param
-     * @param string $strQuote
-     * @return string
+     * @param string $str
+     * @return bool
      */
-    protected static function stripSlashes($param, $strQuote)
+    protected static function isEscaped($str)
     {
-        for ($i = 0, $len = strlen($param); $i < $len; $i++) {
-            foreach (['"', "'"] as $quote) {
-                if ($param{$i} === $quote) {
-                    for ($j = 0; $j < $i; $j++) {
-                        if ($param{$i - $j - 1} !== '\\') {
-                            if ($strQuote === $quote) {
-                                $j--;
-                            }
-                            break;
-                        }
-                    }
-                    if ($j > 0) {
-                        $esc = str_repeat('\\', $j);
-                        foreach (['"', "'"] as $quote) {
-                            $param = str_replace("{$esc}{$quote}", $quote, $param);
-                        }
-                    }
-                    return stripslashes(str_replace("\\$strQuote", $strQuote, $param));
-                }
+        foreach (["'", '"'] as $quote) {
+            $result = [];
+            foreach (['', '\\'] as $i => $slash) {
+                for ($result[$i] = $start = 0, $find = "{$slash}{$quote}", $len = strlen($find);
+                    ($pos = strpos($str, $find, $start)) !== false; $start = $pos + $len, $result[$i] ++);
+            }
+            if ($result[0] !== $result[1]) {
+                return false;
             }
         }
-        return $param;
+        return true;
     }
 
     /**
@@ -174,7 +167,10 @@ class JavaScriptUnpacker
         for ($start = $offset; $start < $len; $start++) {
             foreach (['"', "'"] as $quote) {
                 if ($buf{$start} === $quote) {
-                    for ($i = $start + 1; $i < $len && ($buf{$i} !== $quote || $buf{$i - 1} === '\\'); $i++) ;
+                    for ($i = $start + 1; $i < $len && ($buf{$i} !== $quote || $buf{$i - 1} === '\\'); $i++);
+                    if ($i === $len) {
+                        return false;
+                    }
                     return substr($buf, $start + 1, $i - $start - 1);
                 }
             }
@@ -200,7 +196,8 @@ class JavaScriptUnpacker
             }
             foreach (['"', "'"] as $quote) {
                 if ($buf{$i} === $quote) {
-                    for ($i++; $i < $len && ($buf{$i} !== $quote || $buf{$i - 1} === '\\'); $i++);
+                    for ($i++; $i < $len && ($buf{$i} !== $quote ||
+                        ($buf{$i - 1} === '\\' && ($i < 2 || $buf{$i - 2} !== '\\'))); $i++);
                 }
             }
             if ($buf{$i} === $open) {
