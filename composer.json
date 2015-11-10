@@ -1,0 +1,19 @@
+{
+    "name": "mervick/javascript-unpacker",
+    "description": "PHP helper that makes easy to unpack JavaScript code packed by Dean Edwards packer tool",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Andrey Izman",
+            "email": "izmanw@gmail.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.4.0"
+    },
+    "autoload": {
+        "psr-0": {
+            "JavaScriptUnpacker": ""
+        }
+    }
+}
