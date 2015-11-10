@@ -156,6 +156,23 @@ class JavaScriptUnpacker
 
     /**
      * @param string $buf
+     * @param int $index
+     * @param int $len
+     * @return bool
+     */
+    protected static function isSlashed($buf, $index, $len)
+    {
+        if ($buf{$index} === '\\') {
+            if ($len > 1 && $buf{$index - 1} === '\\') {
+                return self::isSlashed($buf, $index - 2, $len - 2);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * @param string $buf
      * @param int $offset
      * @param null|int $start
      * @param null|string $quote
@@ -163,11 +180,14 @@ class JavaScriptUnpacker
      */
     protected static function findString($buf, $offset, &$start=null, &$quote=null)
     {
-        $len = strlen($buf);
-        for ($start = $offset; $start < $len; $start++) {
+        for ($start = $offset, $len = strlen($buf); $start < $len; $start++) {
             foreach (['"', "'"] as $quote) {
                 if ($buf{$start} === $quote) {
-                    for ($i = $start + 1; $i < $len && ($buf{$i} !== $quote || $buf{$i - 1} === '\\'); $i++);
+                    for ($i = $start + 1; $i < $len; $i++) {
+                        if ($buf{$i} === $quote && !self::isSlashed($buf, $i - 1, $i - $start - 1)) {
+                            break;
+                        }
+                    }
                     if ($i === $len) {
                         return false;
                     }
@@ -196,8 +216,7 @@ class JavaScriptUnpacker
             }
             foreach (['"', "'"] as $quote) {
                 if ($buf{$i} === $quote) {
-                    for ($i++; $i < $len && ($buf{$i} !== $quote ||
-                        ($buf{$i - 1} === '\\' && ($i < 2 || $buf{$i - 2} !== '\\'))); $i++);
+                    for ($i++; $i < $len && ($buf{$i} !== $quote || $buf{$i - 1} === '\\'); $i++);
                 }
             }
             if ($buf{$i} === $open) {
