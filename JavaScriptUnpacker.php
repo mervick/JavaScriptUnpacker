@@ -53,12 +53,11 @@ class JavaScriptUnpacker
                 substr($params, $offset, $pos - $offset)), $matches)))
         {
             list(, $ascii, $count) = $matches;
-            $encoding = self::detectEncoding($body);
             $packed = str_replace('\\' . $quote, $quote, $packed);
-            $decode = $encoding === 95 ? 'decode95' : 'decode62';
+            $decode = 'decode' . self::detectEncoding($body);
             $script = $this->$decode($packed, $ascii, $count, explode('|', $keywords));
             $script = str_replace('\\\\', '\\', $script);
-            while (self::isEscaped($script)) {
+            if (self::isDoubleEscaped($script)) {
                 $script = str_replace(['\\\'', '\\"', '\\\\\'', '\\\\"', '\\\\'],
                     ['\'', '"', '\\\\\'', '\\\\"', '\\'],  $script);
             }
@@ -91,19 +90,22 @@ class JavaScriptUnpacker
      * @param string $str
      * @return bool
      */
-    protected static function isEscaped($str)
+    protected static function isDoubleEscaped($str)
     {
+        $result = true;
         foreach (["'", '"'] as $quote) {
-            $result = [];
+            $matches = [];
             foreach (['', '\\'] as $i => $slash) {
-                for ($result[$i] = $start = 0, $find = "{$slash}{$quote}", $len = strlen($find);
-                    ($pos = strpos($str, $find, $start)) !== false; $start = $pos + $len, $result[$i] ++);
+                for ($matches[$i] = $j = 0, $find = "{$slash}{$quote}", $len = strlen($find);
+                    ($pos = strpos($str, $find, $j)) !== false; $j = $pos + $len, $matches[$i] ++);
             }
-            if ($result[0] !== $result[1]) {
+            list($x, $y) = $matches;
+            if ($x !== $y) {
                 return false;
             }
+            $result = $result && $x;
         }
-        return true;
+        return $result;
     }
 
     /**
@@ -145,6 +147,7 @@ class JavaScriptUnpacker
             return ($count < $ascii ? '' : $encode(intval($count / $ascii))) .
                 mb_convert_encoding(pack('N', $count % $ascii + 161), 'UTF-8', 'UCS-4BE');
         };
+        $decoded = [];
         while ($count--) {
             $encoded = $encode($count);
             $decoded[$encoded] = !empty($keywords[$count]) ? $keywords[$count] : $encoded;
@@ -238,17 +241,7 @@ class JavaScriptUnpacker
      */
     protected static function detectEncoding($body)
     {
-        $body = explode('|', preg_replace('/[^0-9]+/', '|', $body));
-        if (in_array('35', $body) && in_array('29', $body)) {
-            return 62;
-        }
-        if (in_array('161', $body)) {
-            return 95;
-        }
-        if (in_array('36', $body)) {
-            return 36;
-        }
-        return 10;
+        return strpos($body, '161') ? 95 : 62;
     }
 
     /**
