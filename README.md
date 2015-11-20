@@ -23,5 +23,8 @@ echo JavaScriptUnpacker::unpack($js);
 // output: console.log('Hello world!');;
 ```
 
+## Requirements
+PHP >= 5.4
+
 ## License
 MIT
